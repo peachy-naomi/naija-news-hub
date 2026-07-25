@@ -4,3 +4,4 @@ psycopg2-binary==2.9.12
 python-multipart==0.0.32
 resend==2.33.0
 uvicorn==0.51.0
+email-validator
