@@ -9,8 +9,9 @@ export interface Article {
   excerpt: string;
   link: string;
   image_url: string | null;
-  published_at: string;
   category: string | null;
+  view_count: number;
+  published_at: string;
 }
 
 interface ArticlesResponse {
