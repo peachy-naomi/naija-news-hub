@@ -185,49 +185,57 @@ def load_to_postgres(ti):
         return
 
     conn = psycopg2.connect(
-        host=os.environ.get("PG_HOST"),
+        host=os.environ.get("NEWS_PG_HOST"),
         dbname=os.environ.get("NEWS_DB"),
-        user=os.environ.get("PG_USER"),
-        password=os.environ.get("PG_PASSWORD"),
-        port=os.environ.get("PG_PORT"),
+        user=os.environ.get("NEWS_PG_USER"),
+        password=os.environ.get("NEWS_PG_PASSWORD"),
+        port=os.environ.get("NEWS_PG_PORT"),
+        options="-c statement_timeout=120000",  # 2 minutes, more headroom
     )
+
+    conn.autocommit = True  # each insert commits immediately on its own
+    cur = conn.cursor()
+    cur = conn.cursor()
+
     cur = conn.cursor()
 
     cur.execute("SELECT link, image_url FROM news_articles")
     existing = {row[0]: row[1] for row in cur.fetchall()}
 
     fetched_count = 0
-    for article in all_articles:
+    for i, article in enumerate(all_articles):
         needs_image = article["link"] not in existing or not existing[article["link"]]
 
         if needs_image:
             fetched_count += 1
-            # Always try the REAL per-article photo first — this takes priority
-            # over whatever the RSS feed's enclosure/thumbnail already provided,
-            # since some sources (e.g. Punch) only give a generic logo there.
             og_image = fetch_og_image(article["link"], article["source"])
             if og_image:
                 article["image_url"] = og_image
-            # else: keep whatever extract_rss_image already found, as a fallback
 
-        cur.execute(
-            """
-            INSERT INTO news_articles (source, title, excerpt, link, image_url, published_at)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            ON CONFLICT (link) DO UPDATE
-            SET image_url = COALESCE(news_articles.image_url, EXCLUDED.image_url)
-            """,
-            (
-                article["source"],
-                article["title"],
-                article["excerpt"],
-                article["link"],
-                article["image_url"],
-                article["published_at"],
-            ),
-        )
+        try:
+            cur.execute(
+                """
+                INSERT INTO news_articles (source, title, excerpt, link, image_url, published_at)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (link) DO UPDATE
+                SET image_url = COALESCE(news_articles.image_url, EXCLUDED.image_url)
+                """,
+                (
+                    article["source"],
+                    article["title"],
+                    article["excerpt"],
+                    article["link"],
+                    article["image_url"],
+                    article["published_at"],
+                ),
+            )
+        except Exception as e:
+            print(f"  Skipped one article due to insert error: {e}")
+            conn.rollback()  # clear the failed statement so the connection can continue
 
-    conn.commit()
+        # autocommit is on, so each INSERT is its own transaction —
+        # no manual commit needed, and a single slow/failed row can't
+        # roll back or block the rest of the batch
     cur.close()
     conn.close()
     print(f"Processed {len(all_articles)} articles (attempted image fetch for {fetched_count})")
