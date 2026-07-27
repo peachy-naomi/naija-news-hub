@@ -26,13 +26,12 @@ resend.api_key = os.environ.get("RESEND_NEWS_API_KEY")
 
 def get_connection():
     return psycopg2.connect(
-        host=os.environ.get("PG_HOST"),
+        host=os.environ.get("NEWS_PG_HOST"),
         dbname=os.environ.get("NEWS_DB"),
-        user=os.environ.get("PG_USER"),
-        password=os.environ.get("PG_PASSWORD"),
-        port=os.environ.get("PG_PORT"),
+        user=os.environ.get("NEWS_PG_USER"),
+        password=os.environ.get("NEWS_PG_PASSWORD"),
+        port=os.environ.get("NEWS_PG_PORT"),
     )
-
 
 @app.get("/")
 def root():
